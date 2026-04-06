@@ -70,6 +70,12 @@ type WavezRoomState = {
     id: string;
     username: string;
     displayUsername: string;
+    level: number | null;
+    currentLevelXp: number | null;
+    xpRequired: number | null;
+    totalXp: number | null;
+    fanCount: number | null;
+    infiniteLevel: boolean;
   } | null;
 
   playback: {
@@ -89,11 +95,16 @@ type WavezRoomState = {
   } | null;
 
   votes: {
+    trackId: string | null;
     woots: number;
     mehs: number;
     grabs: number;
+    wootUserIds: string[];
+    mehUserIds: string[];
+    grabUserIds: string[];
     clientVote: 'woot' | 'meh' | null;
     clientGrabbed: boolean;
+    clientGrabPlaylistId: string | null;
     canVote: boolean;
   };
 
@@ -104,15 +115,73 @@ type WavezRoomState = {
     isCurrentDj: boolean;
     isLocked: boolean;
     isFull: boolean;
+    currentDjId: string | null;
+    currentDjUsername: string | null;
+    playbackTrackId: string | null;
+    entries: Array<{
+      userId: string;
+      username: string;
+      displayUsername: string | null;
+      avatar: string | null;
+      role: string;
+      platformRole: string;
+      level: number | null;
+      xp: number | null;
+      fanCount: number | null;
+      infiniteLevel: boolean;
+      isFriend: boolean;
+      isFollowing: boolean;
+      position: number;
+      queuedTrackDurationMs: number | null;
+      estimatedWaitMs: number | null;
+      estimatedWaitKind: 'ready' | 'live' | 'unknown';
+    }>;
   };
 
   users: Array<{
     id: string;
     username: string;
+    displayUsername: string | null;
     role: string;
     platformRole: string;
     avatar: string | null;
+    level: number | null;
+    xp: number | null;
+    fanCount: number | null;
+    infiniteLevel: boolean;
+    isFriend: boolean;
+    isFollowing: boolean;
   }>;
+
+  social: {
+    friendIds: string[];
+    followingIds: string[];
+    friendsCount: number;
+    followingCount: number;
+    isFollowingCurrentDj: boolean;
+    isFriendWithCurrentDj: boolean;
+  };
+
+  progress: {
+    currentUser: {
+      id: string;
+      username: string;
+      level: number | null;
+      currentLevelXp: number | null;
+      xpRequired: number | null;
+      totalXp: number | null;
+      fanCount: number | null;
+      infiniteLevel: boolean;
+    } | null;
+    users: Array<{
+      userId: string;
+      username: string;
+      level: number | null;
+      xp: number | null;
+      fanCount: number | null;
+      infiniteLevel: boolean;
+    }>;
+  };
 
   volume: number;
 
@@ -154,6 +223,8 @@ unsubscribe();
 | `queue_changed`    | Queue state updated         |
 | `users_changed`    | Users list updated          |
 | `chat_message`     | New chat message received   |
+| `social_changed`   | Social state updated        |
+| `progress_changed` | Progress data updated       |
 
 ---
 
@@ -175,6 +246,8 @@ Available events:
 * `WavezFM:queue_changed`
 * `WavezFM:users_changed`
 * `WavezFM:chat_message`
+* `WavezFM:social_changed`
+* `WavezFM:progress_changed`
 
 ---
 
@@ -308,10 +381,15 @@ Automatically votes once per track:
 
 ## 🧠 Best Practices
 
-* ❌ Avoid querying DOM elements for core actions
-* ✅ Use `actions` instead of simulating clicks
-* ✅ Use `playback.playbackKey` to detect track changes
-* ✅ Always handle `ok: false` responses
-* 🪵 Use `requestId` for debugging/logging
+* Prefer the official bridge API over DOM queries or simulated UI interactions for core actions.
+* Use `window.WavezFM.actions` for voting, queue actions, chat, and volume control.
+* Use `playback.playbackKey` to detect track changes instead of comparing title or artist text.
+* Always handle `ok: false` action results and branch on the returned `code`.
+* Use `requestId` only for client-side logging and debugging; it is not a server-side identifier.
+* `votes_changed` includes `wootUserIds`, `mehUserIds`, and `grabUserIds` for per-user reaction state.
+* `queue_changed` includes detailed queue entries, ETA data, and social/progression metadata.
+* `social_changed` exposes friendship and following relationships resolved for the current room session.
+* `progress_changed` exposes XP, level, and fan data for the current user and visible room users.
+* Treat `version: "1"` as the compatibility key; future bridge versions may add more actions without changing the meaning of v1.
 
 ---
