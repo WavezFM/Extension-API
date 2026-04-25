@@ -59,6 +59,7 @@ type WavezRoomState = {
     id: string;
     slug: string;
     name: string;
+    description: string;
     isVerified: boolean;
     viewerRole: string;
     queueLocked: boolean;
@@ -70,6 +71,8 @@ type WavezRoomState = {
     id: string;
     username: string;
     displayUsername: string;
+    globalRole: string;
+    roomRole: string | null;
     level: number | null;
     currentLevelXp: number | null;
     xpRequired: number | null;
