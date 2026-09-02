@@ -235,7 +235,8 @@ type WavezActionResult = {
     | 'unavailable'
     | 'missing_room'
     | 'missing_playback'
-    | 'self_vote_not_allowed';
+    | 'self_vote_not_allowed'
+    | 'rejected';
   requestId?: string | null;
 };
 ```
@@ -301,18 +302,36 @@ void (async () => {
     return;
   }
 
+  const RETRY_DELAY_MS = 500;
+  const MAX_RETRY_ATTEMPTS = 10;
   let handledPlaybackKey = null;
   let retryTimeoutId = null;
+  let retryPlaybackKey = null;
+  let retryAttempts = 0;
 
-  const scheduleRetry = () => {
+  const clearRetry = () => {
     if (retryTimeoutId !== null) {
+      window.clearTimeout(retryTimeoutId);
+      retryTimeoutId = null;
+    }
+  };
+
+  const scheduleRetry = (playbackKey) => {
+    if (retryPlaybackKey !== playbackKey) {
+      clearRetry();
+      retryPlaybackKey = playbackKey;
+      retryAttempts = 0;
+    }
+
+    if (retryTimeoutId !== null || retryAttempts >= MAX_RETRY_ATTEMPTS) {
       return;
     }
 
+    retryAttempts += 1;
     retryTimeoutId = window.setTimeout(() => {
       retryTimeoutId = null;
       voteForCurrentTrack();
-    }, 500);
+    }, RETRY_DELAY_MS);
   };
 
   const voteForCurrentTrack = () => {
@@ -323,10 +342,25 @@ void (async () => {
       return;
     }
 
+    if (state.queue.isCurrentDj) {
+      handledPlaybackKey = playback.playbackKey;
+      clearRetry();
+      return;
+    }
+
+    if (state.votes.trackId !== playback.trackId) {
+      scheduleRetry(playback.playbackKey);
+      return;
+    }
+
+    if (state.votes.clientVote === 'woot') {
+      handledPlaybackKey = playback.playbackKey;
+      clearRetry();
+      return;
+    }
+
     if (!state.votes.canVote) {
-      if (!state.queue.isCurrentDj) {
-        scheduleRetry();
-      }
+      scheduleRetry(playback.playbackKey);
       return;
     }
 
@@ -334,15 +368,20 @@ void (async () => {
 
     if (result.ok && result.requestId) {
       handledPlaybackKey = playback.playbackKey;
-      if (retryTimeoutId !== null) {
-        window.clearTimeout(retryTimeoutId);
-        retryTimeoutId = null;
-      }
+      clearRetry();
       return;
     }
 
     console.warn('AutoWoot was not dispatched:', result.code);
-    scheduleRetry();
+    if (
+      result.code === 'unavailable' ||
+      result.code === 'missing_playback' ||
+      result.code === 'rejected'
+    ) {
+      scheduleRetry(playback.playbackKey);
+    } else {
+      clearRetry();
+    }
   };
 
   voteForCurrentTrack();
@@ -356,9 +395,14 @@ void (async () => {
     voteForCurrentTrack,
   );
 
-  // Call both functions and clear retryTimeoutId when the integration is disabled.
-  void unsubscribePlayback;
-  void unsubscribeVotes;
+  const stopAutoWoot = () => {
+    clearRetry();
+    unsubscribePlayback();
+    unsubscribeVotes();
+  };
+
+  // Call stopAutoWoot() when the integration is disabled.
+  void stopAutoWoot;
 })();
 ```
 
