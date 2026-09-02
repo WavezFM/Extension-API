@@ -302,6 +302,18 @@ void (async () => {
   }
 
   let handledPlaybackKey = null;
+  let retryTimeoutId = null;
+
+  const scheduleRetry = () => {
+    if (retryTimeoutId !== null) {
+      return;
+    }
+
+    retryTimeoutId = window.setTimeout(() => {
+      retryTimeoutId = null;
+      voteForCurrentTrack();
+    }, 500);
+  };
 
   const voteForCurrentTrack = () => {
     const state = api.room.getState();
@@ -311,23 +323,26 @@ void (async () => {
       return;
     }
 
-    if (state.votes.clientVote === 'woot') {
-      handledPlaybackKey = playback.playbackKey;
-      return;
-    }
-
     if (!state.votes.canVote) {
+      if (!state.queue.isCurrentDj) {
+        scheduleRetry();
+      }
       return;
     }
 
     const result = api.actions.vote('woot');
 
-    if (result.ok) {
+    if (result.ok && result.requestId) {
       handledPlaybackKey = playback.playbackKey;
+      if (retryTimeoutId !== null) {
+        window.clearTimeout(retryTimeoutId);
+        retryTimeoutId = null;
+      }
       return;
     }
 
     console.warn('AutoWoot was not dispatched:', result.code);
+    scheduleRetry();
   };
 
   voteForCurrentTrack();
@@ -341,7 +356,7 @@ void (async () => {
     voteForCurrentTrack,
   );
 
-  // Call both functions when the integration is disabled.
+  // Call both functions and clear retryTimeoutId when the integration is disabled.
   void unsubscribePlayback;
   void unsubscribeVotes;
 })();
